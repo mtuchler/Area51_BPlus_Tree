@@ -21,6 +21,17 @@
 
 namespace badgerdb
 {
+	LeafNodeInt *BTreeIndex::CreateLeafNode(PageId &newPageId) {
+		LeafNodeInt* newNode;
+		bufMgr->allocPage(file,newPageId,(Page *&)newNode);
+  		return newNode;
+	}
+
+	NonLeafNodeInt *BTreeIndex::CreateNonLeafNode(PageId &newPageId) {
+		NonLeafNodeInt *newNode;
+		bufMgr->allocPage(file, newPageId,(Page *&)newNode);
+		return newNode;
+	}
 	// -----------------------------------------------------------------------------
 	// BTreeIndex::BTreeIndex -- Constructor
 	// -----------------------------------------------------------------------------
@@ -48,6 +59,12 @@ namespace badgerdb
 
 		//creates a new BlobFile using the indexName
 		file = new BlobFile(outIndexName, true);
+
+		//creates a leaf node for the root of the index
+		CreateLeafNode(indexMetaInfo.rootPageNo);
+
+		//unPins the page that was pinned to create the leaf node
+  		bufMgr->unPinPage(file, indexMetaInfo.rootPageNo, true);
 
 		//creates a file scanner used to iterate through the record ids
 		FileScan fileScanner(relationName, bufMgr);

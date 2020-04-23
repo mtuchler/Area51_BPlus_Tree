@@ -299,6 +299,9 @@ class BTreeIndex {
 	
  public:
 
+  LeafNodeInt *CreateLeafNode(PageId &newPageId);
+  NonLeafNodeInt *CreateNonLeafNode(PageId &newPageId);
+
   /**
    * BTreeIndex Constructor. 
 	 * Check to see if the corresponding index file exists. If so, open the file.
