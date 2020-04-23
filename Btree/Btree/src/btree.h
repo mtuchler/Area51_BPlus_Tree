@@ -228,6 +228,11 @@ class BTreeIndex {
    */
 	int			nodeOccupancy;
 
+  /**
+   * Struct to hold information for the root index
+   */
+  struct IndexMetaInfo indexMetaInfo {};
+
 
 	// MEMBERS SPECIFIC TO SCANNING
 

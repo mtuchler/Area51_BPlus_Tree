@@ -21,66 +21,108 @@
 
 namespace badgerdb
 {
+	// -----------------------------------------------------------------------------
+	// BTreeIndex::BTreeIndex -- Constructor
+	// -----------------------------------------------------------------------------
 
-// -----------------------------------------------------------------------------
-// BTreeIndex::BTreeIndex -- Constructor
-// -----------------------------------------------------------------------------
+	BTreeIndex::BTreeIndex(const std::string & relationName,
+			std::string & outIndexName,
+			BufMgr *bufMgrIn,
+			const int _attrByteOffset,
+			const Datatype attrType)
+	{
+		//sets the relation name (code copied from pp3.pdf)
+		std::ostringstream idxStr;
+		idxStr << relationName << '.' << attrByteOffset;
+		outIndexName = idxStr.str();
 
-BTreeIndex::BTreeIndex(const std::string & relationName,
-		std::string & outIndexName,
-		BufMgr *bufMgrIn,
-		const int attrByteOffset,
-		const Datatype attrType)
-{
+		//sets the information for the indexMetaInfo (first page of the index file)
+		strcpy(indexMetaInfo.relationName,relationName.c_str);
+		indexMetaInfo.attrByteOffset = attrByteOffset;
+		indexMetaInfo.attrType = attrType;
 
-}
+		//sets btree variables based on input variables
+		bufMgr = bufMgrIn;
+		attrByteOffset = _attrByteOffset;
+		attributeType = attrType;
+
+		//creates a new BlobFile using the indexName
+		file = new BlobFile(outIndexName, true);
+
+		//creates a file scanner used to iterate through the record ids
+		FileScan fileScanner(relationName, bufMgr);
+
+		try {
+			RecordId scanRid;
+			while (true) {
+				//gets the next record Id
+				fileScanner.scanNext(scanRid);
+				//gets the record using the record id
+				std::string recordStr = fileScanner.getRecord();
+				const char *record = recordStr.c_str();
+				//creates the key using the record and the byte offset
+				int key = *((int *)(record + attrByteOffset));
+				//inserts the entry into the index
+				insertEntry(&key, scanRid);
+			}
+		} catch (EndOfFileException e) {
+		}
+	}
 
 
-// -----------------------------------------------------------------------------
-// BTreeIndex::~BTreeIndex -- destructor
-// -----------------------------------------------------------------------------
+	// -----------------------------------------------------------------------------
+	// BTreeIndex::~BTreeIndex -- destructor
+	// -----------------------------------------------------------------------------
 
-BTreeIndex::~BTreeIndex()
-{
-}
+	BTreeIndex::~BTreeIndex()
+	{
+		//ends any ongoing scans and flushes the file
+		if (scanExecuting) endScan();
+		bufMgr->flushFile(file);
+		delete file;
+	}
 
-// -----------------------------------------------------------------------------
-// BTreeIndex::insertEntry
-// -----------------------------------------------------------------------------
+	// -----------------------------------------------------------------------------
+	// BTreeIndex::insertEntry
+	// -----------------------------------------------------------------------------
 
-const void BTreeIndex::insertEntry(const void *key, const RecordId rid) 
-{
+	const void BTreeIndex::insertEntry(const void *key, const RecordId rid) 
+	{
 
-}
+	}
 
-// -----------------------------------------------------------------------------
-// BTreeIndex::startScan
-// -----------------------------------------------------------------------------
+	// -----------------------------------------------------------------------------
+	// BTreeIndex::startScan
+	// -----------------------------------------------------------------------------
 
-const void BTreeIndex::startScan(const void* lowValParm,
-				   const Operator lowOpParm,
-				   const void* highValParm,
-				   const Operator highOpParm)
-{
+	const void BTreeIndex::startScan(const void* lowValParm,
+					const Operator lowOpParm,
+					const void* highValParm,
+					const Operator highOpParm)
+	{
 
-}
+	}
 
-// -----------------------------------------------------------------------------
-// BTreeIndex::scanNext
-// -----------------------------------------------------------------------------
+	// -----------------------------------------------------------------------------
+	// BTreeIndex::scanNext
+	// -----------------------------------------------------------------------------
 
-const void BTreeIndex::scanNext(RecordId& outRid) 
-{
+	const void BTreeIndex::scanNext(RecordId& outRid) 
+	{
+		
+	}
 
-}
-
-// -----------------------------------------------------------------------------
-// BTreeIndex::endScan
-// -----------------------------------------------------------------------------
-//
-const void BTreeIndex::endScan() 
-{
-
-}
+	// -----------------------------------------------------------------------------
+	// BTreeIndex::endScan
+	// -----------------------------------------------------------------------------
+	//
+	const void BTreeIndex::endScan() 
+	{
+		//throws ScanNotInitializedException if the scan hasn't been started yet
+		if (!scanExecuting) throw ScanNotInitializedException();
+		scanExecuting = false;
+		//unpins the page associated with the scan
+		bufMgr->unPinPage(file, currentPageNum, false);
+	}
 
 }
