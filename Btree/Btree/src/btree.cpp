@@ -24,12 +24,14 @@ namespace badgerdb
 	LeafNodeInt *BTreeIndex::CreateLeafNode(PageId &newPageId) {
 		LeafNodeInt* newNode;
 		bufMgr->allocPage(file,newPageId,(Page *&)newNode);
+		newNode.num_keys = 1;
   		return newNode;
 	}
 
 	NonLeafNodeInt *BTreeIndex::CreateNonLeafNode(PageId &newPageId) {
 		NonLeafNodeInt *newNode;
 		bufMgr->allocPage(file, newPageId,(Page *&)newNode);
+		newNode.num_keys = 1;
 		return newNode;
 	}
 	// -----------------------------------------------------------------------------
@@ -51,18 +53,20 @@ namespace badgerdb
 		strcpy(indexMetaInfo.relationName,relationName.c_str);
 		indexMetaInfo.attrByteOffset = attrByteOffset;
 		indexMetaInfo.attrType = attrType;
+		indexMetaInfo.isLeaf = true; //root is a leaf
 
 		//sets btree variables based on input variables
 		bufMgr = bufMgrIn;
 		attrByteOffset = _attrByteOffset;
 		attributeType = attrType;
+		rootPageNum = indexMetaInfo.rootPageNo
 
 		//creates a new BlobFile using the indexName
 		file = new BlobFile(outIndexName, true);
 
 		//creates a leaf node for the root of the index
 		CreateLeafNode(indexMetaInfo.rootPageNo);
-
+		
 		//unPins the page that was pinned to create the leaf node
   		bufMgr->unPinPage(file, indexMetaInfo.rootPageNo, true);
 
@@ -105,7 +109,97 @@ namespace badgerdb
 
 	const void BTreeIndex::insertEntry(const void *key, const RecordId rid) 
 	{
+		Page* page = file.ReadPage(rootPageNum);
 
+		if(indexMetaInfo.isLeaf == true){
+			LeafNodeInt* root = (LeafNodeInt*) page;
+			root.parent = NULL;
+			if(numKeys == INTARRAYLEAFSIZE){
+				split( //NEEDS MORE
+			}
+			else{
+				for(int i = 0; i < node.numKeys; i ++){
+					if(key < root.keyArray[i]){
+						int key_temp = root.keyArray[i];
+						RecordId rid_temp = root.ridArray[i];
+
+						root.keyArray[i] = key;
+						root.ridArray[i] = rid;
+						
+						key = key_temp;
+						rid = rid_temp;
+					}
+				}
+				root.numKeys++;
+			}
+		}
+		else{
+			NonLeafNodeInt* root = (NonLeafNodeInt*) page;
+			LeafNodeInt* = findLeafNode(key, rootPageNum);
+			if(numKeys == INTARRAYLEAFSIZE){
+				splitLeafNode( //NEEDS MORE
+			}
+			else{
+				for(int i = 0; i < node.numKeys; i ++){
+					if(key < root.keyArray[i]){
+						int key_temp = root.keyArray[i];
+						RecordId rid_temp = root.ridArray[i];
+
+						root.keyArray[i] = key;
+						root.ridArray[i] = rid;
+						
+						key = key_temp;
+						rid = rid_temp;
+					}
+				}
+				root.numKeys++;
+			}
+
+		}
+	}
+
+	const void splitLeafNode(const void *key, const RecordId rid, PageId* pageNo){
+		Page* page = file.ReadPage(pageNo);
+		LeafNodeInt* node = (LeafNodeInt*) page;
+		int arr1[INTARRAYLEAFSIZE+1];
+		RecordId arr2[INTARRAYLEAFSIZE+1];
+		int offset = 0;
+		for(int i = 0; i < node.numKeys; i++){
+			if(key < node.keyArray[i] && offset == 0){
+				arr1[i] = key;
+				arr2[i] = rid;
+				offset = 1;
+				i--;
+			}
+			else{
+				arr1[i+offset] = node.keyArray[i];
+				arr2[i+offset] = node.ridArray[i];
+			}
+		}
+		int splitIndex = (numkeys + 1) / 2
+
+	}
+
+	const LeafNodeInt* BTreeIndex::findLeafNode(const void *key, PageId* pageNo){
+		Page* page = file.ReadPage(pageNo);
+		NonLeafNodeInt* node = (NonLeafNodeInt*) page;
+		int i;
+		if(node.level == 1){
+			for(i = 0; i < node.numKeys - 1; i++){
+				if(key < node.keyArray[i]){
+					return file.ReadPage(node.pageNoArray[i]);
+				}
+			}
+			return file.ReadPage(node.pageNoArray[node.numKeys])
+		}
+		else if(node.level == 0){
+			for(i = 0; i < node.numKeys - 1; i++){
+				if(key < node.keyArray[i]){
+					return findLeafNode(key, file.ReadPage(node.pageNoArray[i]));
+				}
+			}
+			return findLeafNode(key, node.pageNoArray[node.numKeys])
+		}
 	}
 
 	// -----------------------------------------------------------------------------

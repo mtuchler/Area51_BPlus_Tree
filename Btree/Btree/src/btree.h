@@ -128,6 +128,10 @@ struct IndexMetaInfo{
    * Page number of root page of the B+ Tree inside the file index file.
    */
 	PageId rootPageNo;
+ /**
+   * Variable to keep track of if root is a leaf
+   */
+	bool isLeaf; 
 };
 
 /*
@@ -155,6 +159,10 @@ struct NonLeafNodeInt{
    * Stores page numbers of child pages which themselves are other non-leaf/leaf nodes in the tree.
    */
 	PageId pageNoArray[ INTARRAYNONLEAFSIZE + 1 ];
+
+	int numKeys; 
+
+	PageId parent;
 };
 
 
@@ -177,6 +185,10 @@ struct LeafNodeInt{
 	 * This linking of leaves allows to easily move from one leaf to the next leaf during index scan.
    */
 	PageId rightSibPageNo;
+
+	int numKeys;
+
+	PageId parent;
 };
 
 
