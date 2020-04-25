@@ -312,6 +312,7 @@ class BTreeIndex {
  public:
 
   LeafNodeInt *CreateLeafNode(PageId &newPageId);
+
   NonLeafNodeInt *CreateNonLeafNode(PageId &newPageId);
 
   /**
@@ -349,6 +350,33 @@ class BTreeIndex {
    * @param rid			Record ID of a record whose entry is getting inserted into the index.
 	**/
 	const void insertEntry(const void* key, const RecordId rid);
+
+  // -------------------------------------------------------------
+	// @brief splitLeafNode performs the split of a leaf node into two
+	// 	  when an insertion is performed on a full node
+	// key:		the key being inserted
+	// rid:		the rid being inserted
+	// pageNo:	the pointer to the node being split
+	// returns:	void
+	// -------------------------------------------------------------
+  const void splitLeafNode(const void *key, const RecordId rid,  PageId pageNo);
+
+  //--------------------------------------------------------------------
+	// @brief	splitNonLeafNode is used for splitting a node
+	// 		that is not a leaf node. Revolutionary!
+	// key:		the key that causes overflow
+	// pageNo:	something
+	//--------------------------------------------------------------------
+	const void BTreeIndex::splitNonLeafNode(const void *key, PageId pageNo);
+
+  //--------------------------------------------------------------------
+	// @brief	findLeafNode traverses the tree downwards to find the
+	// 		leaf node that fits the given key
+	// key:		the key to insert
+	// pageNo:	a NonLeafNodeInt* that will serve as the start of the search
+	// returns:	the LeafNodeInt* where the key is in range
+	//--------------------------------------------------------------------
+	LeafNodeInt* BTreeIndex::findLeafNode(const void *key, PageId pageNo);
 
 
   /**

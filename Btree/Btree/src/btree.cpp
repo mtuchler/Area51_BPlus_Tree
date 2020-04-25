@@ -24,14 +24,14 @@ namespace badgerdb
 	LeafNodeInt *BTreeIndex::CreateLeafNode(PageId &newPageId) {
 		LeafNodeInt* newNode;
 		bufMgr->allocPage(file,newPageId,(Page *&)newNode);
-		newNode.numKeys = 1;
+		newNode->numKeys = 1;
   		return newNode;
 	}
 
 	NonLeafNodeInt *BTreeIndex::CreateNonLeafNode(PageId &newPageId) {
 		NonLeafNodeInt *newNode;
 		bufMgr->allocPage(file, newPageId,(Page *&)newNode);
-		newNode.numKeys = 1;
+		newNode->numKeys = 1;
 		return newNode;
 	}
 	// -----------------------------------------------------------------------------
@@ -59,7 +59,7 @@ namespace badgerdb
 		bufMgr = bufMgrIn;
 		attrByteOffset = _attrByteOffset;
 		attributeType = attrType;
-		rootPageNum = indexMetaInfo.rootPageNo
+		rootPageNum = indexMetaInfo.rootPageNo;
 
 		//creates a new BlobFile using the indexName
 		file = new BlobFile(outIndexName, true);
@@ -110,7 +110,11 @@ namespace badgerdb
 	const void BTreeIndex::insertEntry(const void *key, const RecordId rid) 
 	{
 		// Begin searching for the place to insert at the root
-		Page* page = file.ReadPage(rootPageNum);
+		Page* page = &file->readPage(indexMetaInfo.rootPageNo);
+
+		int keyInt = (int)key;
+
+		RecordId currRid = rid;
 
 		// Case: the root is a leaf (B+ tree has one node)
 		if(indexMetaInfo.isLeaf == true){
@@ -121,7 +125,7 @@ namespace badgerdb
 			
 			// Case: The root node is full during the insert
 			// perform leaf node split
-			if(numKeys == INTARRAYLEAFSIZE){
+			if(root->numKeys == INTARRAYLEAFSIZE){
 				splitLeafNode(key,rid, indexMetaInfo.rootPageNo);
 				indexMetaInfo.isLeaf = false;
 			}
@@ -130,21 +134,21 @@ namespace badgerdb
 			// bubble insert the key and rid into their places
 			else{
 				for(int i = 0; i < root->numKeys; i ++){
-					if(key < root->keyArray[i]){
+					if(keyInt < root->keyArray[i]){
 						int key_temp = root->keyArray[i];
 						RecordId rid_temp = root->ridArray[i];
 
-						root->keyArray[i] = key;
+						root->keyArray[i] = keyInt;
 						root->ridArray[i] = rid;
 						
-						key = key_temp;
-						rid = rid_temp;
+						keyInt = key_temp;
+						currRid = rid_temp;
 					}
 				}
 				// after loop, insert i = root.numKeys, and
 				// key and rid need to be inserted at the end
-				root->keyArray[root->numKeys] = key;
-				root->ridArray[root->numKeys] = rid;
+				root->keyArray[root->numKeys] = keyInt;
+				root->ridArray[root->numKeys] = currRid;
 				// also, numKeys gets a new friend :)
 				root->numKeys++;
 			}
@@ -154,32 +158,34 @@ namespace badgerdb
 			// keep track of root node
 			NonLeafNodeInt* root = (NonLeafNodeInt*) page;
 			// returns the leaf node where the data goes
-			LeafNodeInt* node = findLeafNode(key, rootPageNum);
+			LeafNodeInt* node = findLeafNode(key, indexMetaInfo.rootPageNo);
+
+			Page* nodePage = ((Page *&)node);
 
 			// Case: leaf node is full
 			// perform leaf node split 
 			if(node->numKeys == INTARRAYLEAFSIZE){
-				splitLeafNode(key,rid,((Page*) node).page_number())
+				splitLeafNode(key,rid,nodePage->page_number());
 			}
 
 			// Case: leaf node has space
 			// perform bubble insert of key and rid
 			else{
 				for(int i = 0; i < node->numKeys; i ++){
-					if(key < node->keyArray[i]){
+					if(keyInt < node->keyArray[i]){
 						int key_temp = node->keyArray[i];
 						RecordId rid_temp = node->ridArray[i];
 
-						node->keyArray[i] = key;
-						node->ridArray[i] = rid;
+						node->keyArray[i] = keyInt;
+						node->ridArray[i] = currRid;
 						
-						key = key_temp;
-						rid = rid_temp;
+						keyInt = key_temp;
+						currRid = rid_temp;
 					}
 				}
 				// after insert, i = numKeys + 1 and key and rid need insertion
-				node->keyArray[node->numKeys] = key;
-				node->ridArray[node->numKeys] = rid;
+				node->keyArray[node->numKeys] = keyInt;
+				node->ridArray[node->numKeys] = currRid;
 				// numKeys makes a new friend
 				node->numKeys++;
 			}
@@ -194,10 +200,14 @@ namespace badgerdb
 	// pageNo:	the pointer to the node being split
 	// returns:	void
 	// -------------------------------------------------------------
-	const void splitLeafNode(const void *key, const RecordId rid,  PageId* pageNo){
+	const void BTreeIndex::splitLeafNode(const void *key, const RecordId rid,  PageId pageNo){
 		// cast node being split into a leaf node struct
-		Page* page = file.ReadPage(pageNo);
+		Page* page = &file->readPage(pageNo);
 		LeafNodeInt* node = (LeafNodeInt*) page;
+
+		int keyInt = (int)key;
+		RecordId currRid = rid;
+
 		// initialize temporary arrays for key and rid storage
 		// size = num of records in full array + 1 being added
 		int arr1[INTARRAYLEAFSIZE+1];
@@ -205,9 +215,9 @@ namespace badgerdb
 		// following code block inserts everything into arr1[] and arr2[]
 		int offset = 0;
 		for(int i = 0; i < node->numKeys; i++){
-			if(key < node->keyArray[i] && offset == 0){
-				arr1[i] = key;
-				arr2[i] = rid;
+			if(keyInt < node->keyArray[i] && offset == 0){
+				arr1[i] = keyInt;
+				arr2[i] = currRid;
 				offset = 1;
 				i--;
 			}
@@ -219,11 +229,11 @@ namespace badgerdb
 
 		// splitIndex is the index of the median key, and it points to
 		// the first element in the new node
-		int splitIndex = (numkeys + 1) / 2;
+		int splitIndex = (node->numKeys + 1) / 2;
 
 		// create the new node, a sibling page to the right of "node"
 		PageId* newPageNo;
-		LeafNodeInt* newNode = CreateLeafNode(newPageNo);
+		LeafNodeInt* newNode = CreateLeafNode(*newPageNo);
 		//unpin page ASAP
 		// TODO: WHEN TO UNPIN PAGES ----- bufMgr->unPinPage(file, newPageNo, true);
 		
@@ -243,7 +253,7 @@ namespace badgerdb
 		// update sibling pointers
 		// newNode goes to the right of oldNode
 		newNode->rightSibPageNo = oldNode->rightSibPageNo;
-		oldNode->rightSibPageNo = (PageId*)newNode;
+		oldNode->rightSibPageNo = (PageId)newNode;
 		// give newNode a parent
 		newNode->parent = oldNode->parent;
 
@@ -254,50 +264,54 @@ namespace badgerdb
 		if (oldNode->parent == NULL) {
 			// create a new NonLeafNode
 			PageId* newRootPageNo;
-			NonLeafNodeInt* newRoot = CreateNonLeafNode(newRootPageNo);
+			NonLeafNodeInt* newRoot = CreateNonLeafNode(*newRootPageNo);
 			// set the info that makes it a root
 			newRoot->parent = NULL;
 			newRoot->level = 1;
-			IndexMetaInfo rootPageNo = (PageId) &newRoot;
+			indexMetaInfo.rootPageNo = *newRootPageNo;
 			// set each child's parent field
-			newNode->parent = newRoot;
-			oldNode->parent = newRoot;
+			newNode->parent = *newRootPageNo;
+			oldNode->parent = *newRootPageNo;
 			
 			// insert new key and children pageNo's
 			newRoot->keyArray[0] = arr1[splitIndex];
-			newRoot->pageNoArray[0] = ((Page*) oldNode).page_number();
-			newRoot->pageNoArray[1] = ((Page*) newNode).page_number();
+			newRoot->pageNoArray[0] = pageNo;
+			newRoot->pageNoArray[1] = *newPageNo;
 		}
 		// Case: oldNode was NOT the root
 		else{
 			// call out parent
-			NonLeafNodeInt* parent = oldNode->parent;
+			PageId parentPageId = oldNode->parent;
+			NonLeafNodeInt* parent = (NonLeafNodeInt*)&file->readPage(parentPageId);
 			// Case: parent has space for new key
 			if (parent->numKeys < INTARRAYNONLEAFSIZE) {
 				// create variable for PageNo
 				PageId* newPageNo = (PageId*) newNode;
 				// perform a bubble insert of the key
 				for (int i = 0; i < parent->numKeys; i++){
-					if (key < parent->keyArray[i]) {
+
+					if (keyInt < parent->keyArray[i]) {
 						int key_temp = parent->keyArray[i];
-						PageId* page_temp = parent->pageNoArray[i];
+						PageId* page_temp = &parent->pageNoArray[i];
 
-						parent->keyArray[i] = key;
-						parent->pageNoArray[i] = newPageNo;
+						parent->keyArray[i] = keyInt;
+						parent->pageNoArray[i] = *newPageNo;
 
-						key = key_temp;
+						keyInt = key_temp;
 						newPageNo = page_temp;
 					}
+
 				}
-				parent->keyArray[parent->numKeys] = key;
-				page_temp = parent->pageNoArray[parent->numKeys];
-				parent->pageNoArray[parent->numKeys] = newPageNo;
+				parent->keyArray[parent->numKeys] = keyInt;
+				PageId page_temp = parent->pageNoArray[parent->numKeys];
+				parent->pageNoArray[parent->numKeys] = *newPageNo;
 				parent->pageNoArray[parent->numKeys+1] = page_temp;
 				parent->numKeys++;
 			}
 			// Case: parent doesn't have space for new key
 			else{
-				splitNonLeafNode(parent->keyArray[splitIndex],((Page*)parent).page_number());
+				int* parentKey = &parent->keyArray[splitIndex];
+				splitNonLeafNode(parentKey,parentPageId);
 			}
 
 		}
@@ -309,38 +323,41 @@ namespace badgerdb
 	// key:		the key that causes overflow
 	// pageNo:	something
 	//--------------------------------------------------------------------
-	const void splitNonLeafNode(const void *key, PageId* pageNo) {
+	const void BTreeIndex::splitNonLeafNode(const void *key, PageId pageNo) {
 		// cast node being split into a leaf node struct
-		Page* page = file.ReadPage(pageNo);
+		Page* page = &file->readPage(pageNo);
 		NonLeafNodeInt* node = (NonLeafNodeInt*) page;
+
+		int keyInt = (int)key;
+
 		// initialize temporary arrays for key and rid storage
 		// size = num of records in full array + 1 being added
 		int arr1[INTARRAYNONLEAFSIZE+1];
-		pageId* arr2[INTARRAYNONLEAFSIZE+2];
+		PageId* arr2[INTARRAYNONLEAFSIZE+2];
 		// following code block inserts everything into arr1[] and arr2[]
 		int offset = 0;
 		for(int i = 0; i < node->numKeys; i++){
-			if(key < node->keyArray[i] && offset == 0){
-				arr1[i] = key;
-				arr2[i] = rid;
+			if(keyInt < node->keyArray[i] && offset == 0){
+				arr1[i] = keyInt;
+				arr2[i] = &pageNo;
 				offset = 1;
 				i--;
 			}
 			else{
 				arr1[i+offset] = node->keyArray[i];
-				arr2[i+offset] = node->pageNoArray[i];
+				arr2[i+offset] = &node->pageNoArray[i];
 			}
 		}
 		//get the last item in pageNoArray, add it to last space in arr2
-		arr2[node->numKeys+1] = node->pageNoArray[node->numKeys] //MAYBE SWITCH TO INTARRAYNONLEAFSIZE
+		arr2[node->numKeys+1] = &node->pageNoArray[node->numKeys]; //MAYBE SWITCH TO INTARRAYNONLEAFSIZE
 
 		// splitIndex is the index of the median key, and it points to
 		// the first element in the new node
-		int splitIndex = (node->numkeys + 1) / 2;
+		int splitIndex = (node->numKeys + 1) / 2;
 
 		// create the new node, a sibling page to the right of "node"
 		PageId* newPageNo;
-		NonLeafNodeInt* newNode = CreateNonLeafNode(newPageNo);
+		NonLeafNodeInt* newNode = CreateNonLeafNode(*newPageNo);
 		NonLeafNodeInt* oldNode = node;
 
 		// set numKeys of each node to proper value
@@ -351,9 +368,9 @@ namespace badgerdb
 		// fill entries of newNode arrays
 		for (int i = 0; i < numKeysNewNode; i++){
 			newNode->keyArray[i] = arr1[splitIndex + i];
-			newNode->pageNoArray[i] = arr2[splitIndex + i];
+			newNode->pageNoArray[i] = *arr2[splitIndex + i];
 		}
-		newNode->pageNoArray[numKeysNewNode] = arr2[splitIndex+numKeysNewNode];
+		newNode->pageNoArray[numKeysNewNode] = *arr2[splitIndex+numKeysNewNode];
 
 
 		// give newNode a parent
@@ -366,50 +383,52 @@ namespace badgerdb
 		if (oldNode->parent == NULL) {
 			// create a new NonLeafNode
 			PageId* newRootPageNo;
-			NonLeafNodeInt* newRoot = CreateNonLeafNode(newRootPageNo);
+			NonLeafNodeInt* newRoot = CreateNonLeafNode(*newRootPageNo);
 			// set the info that makes it a root
 			newRoot->parent = NULL;
 			newRoot->level = 0;
-			IndexMetaInfo rootPageNo = newRootPageNo;
+			indexMetaInfo.rootPageNo = *newRootPageNo;
 			// set each child's parent field
-			newNode->parent = newRoot;
-			oldNode->parent = newRoot;
+			newNode->parent = *newRootPageNo;
+			oldNode->parent = *newRootPageNo;
 			
 			// insert new key and children pageNo's
 			newRoot->keyArray[0] = arr1[splitIndex];
-			newRoot->pageNoArray[0] = ((Page*) oldNode).page_number();
-			newRoot->pageNoArray[1] = ((Page*) newNode).page_number();
+			newRoot->pageNoArray[0] = pageNo;
+			newRoot->pageNoArray[1] = *newPageNo;
 		}
 		// Case: oldNode was NOT the root
 		else{
 			// call out parent
-			NonLeafNodeInt* parent = oldNode->parent;
+			PageId parentPageId = oldNode->parent;
+			NonLeafNodeInt* parent = (NonLeafNodeInt*)&file->readPage(parentPageId);
 			// Case: parent has space for new key
 			if (parent->numKeys < INTARRAYNONLEAFSIZE) {
 				// create variable for PageNo
 				PageId* newPageNo = (PageId*) newNode;
 				// perform a bubble insert of the key
 				for (int i = 0; i < parent->numKeys; i++){
-					if (key < parent->keyArray[i]) {
+					if (keyInt < parent->keyArray[i]) {
 						int key_temp = parent->keyArray[i];
-						PageId* page_temp = parent->pageNoArray[i];
+						PageId* page_temp = &parent->pageNoArray[i];
 
-						parent->keyArray[i] = key;
-						parent->pageNoArray[i] = newPageNo;
+						parent->keyArray[i] = keyInt;
+						parent->pageNoArray[i] = *newPageNo;
 
-						key = key_temp;
+						keyInt = key_temp;
 						newPageNo = page_temp;
 					}
 				}
-				parent->keyArray[parent->numKeys] = key;
-				page_temp = parent->pageNoArray[parent->numKeys];
-				parent->pageNoArray[parent->numKeys] = newPageNo;
+				parent->keyArray[parent->numKeys] = keyInt;
+				PageId page_temp = parent->pageNoArray[parent->numKeys];
+				parent->pageNoArray[parent->numKeys] = *newPageNo;
 				parent->pageNoArray[parent->numKeys+1] = page_temp;
 				parent->numKeys++;
 			}
 			// Case: parent doesn't have space for new key
 			else{
-				splitNonLeafNode(parent->keyArray[splitIndex],((Page*)parent).page_number());
+				int* parentKey = &parent->keyArray[splitIndex];
+				splitNonLeafNode(parentKey,parentPageId);
 			}
 
 		}
@@ -423,25 +442,26 @@ namespace badgerdb
 	// pageNo:	a NonLeafNodeInt* that will serve as the start of the search
 	// returns:	the LeafNodeInt* where the key is in range
 	//--------------------------------------------------------------------
-	const LeafNodeInt* BTreeIndex::findLeafNode(const void *key, PageId* pageNo){
-		Page* page = file.ReadPage(pageNo);
+	LeafNodeInt* BTreeIndex::findLeafNode(const void *key, PageId pageNo){
+		Page* page = &file->readPage(pageNo);
 		NonLeafNodeInt* node = (NonLeafNodeInt*) page;
 		int i;
+		int keyInt = (int)key;
 		if(node->level == 1){
 			for(i = 0; i < node->numKeys - 1; i++){
-				if(key < node->keyArray[i]){
-					return file.ReadPage(node->pageNoArray[i]);
+				if(keyInt < node->keyArray[i]){
+					return (LeafNodeInt*)&file->readPage(node->pageNoArray[i]);
 				}
 			}
-			return file.ReadPage(node.pageNoArray[node->numKeys])
+			return (LeafNodeInt*)&file->readPage(node->pageNoArray[node->numKeys]);
 		}
 		else if(node->level == 0){
 			for(i = 0; i < node->numKeys - 1; i++){
-				if(key < node->keyArray[i]){
-					return findLeafNode(key, file.ReadPage(node->pageNoArray[i]));
+				if(keyInt < node->keyArray[i]){
+					return findLeafNode(key, node->pageNoArray[i]);
 				}
 			}
-			return findLeafNode(key, node->pageNoArray[node->numKeys])
+			return findLeafNode(key, node->pageNoArray[node->numKeys]);
 		}
 	}
 
@@ -468,17 +488,17 @@ namespace badgerdb
 
 
 		scanExecuting = true; 
-		lowValInt = (int*) lowValParm;
-		highValInt = (int*) highValParm;
+		lowValInt = (int) lowValParm;
+		highValInt = (int) highValParm;
 		lowOp = lowOpParm;
 		highOp = highOpParm;
 		
 
 
 		if(lowOpParm == 'GT'){
-			LeafNodeInt* currPage = findLeafNode(lowValParm +1 , indexMetaInfo.rootPageNo);
-			currPageData = (Page*) currPage;
-			currPageNo = ((Page*) currPage).page_number();
+			LeafNodeInt* currPage = findLeafNode((const void*)(lowValInt + 1) , indexMetaInfo.rootPageNo);
+			currentPageData = (Page*) currPage;
+			currentPageNum = ((Page*) currPage)->page_number();
 			for(int i = 0; i < currPage->numKeys; i++){
 				if(currPage->keyArray[i] > lowValInt){
 					nextEntry = i;
@@ -488,8 +508,8 @@ namespace badgerdb
 		}
 		else if(lowOpParm == 'GTE'){
 			LeafNodeInt* currPage = findLeafNode(lowValParm, indexMetaInfo.rootPageNo);
-			currPageData = (Page*) currPage;
-			currPageNo = ((Page*) currPage).page_number();
+			currentPageData = (Page*) currPage;
+			currentPageNum = ((Page*) currPage)->page_number();
 			for(int i = 0; i < currPage->numKeys; i++){
 				if(currPage->keyArray[i] >= lowValInt){
 					nextEntry = i;
@@ -523,8 +543,8 @@ namespace badgerdb
 		nextEntry = NULL;
 		lowValInt = NULL;
 		highValInt = NULL;
-		lowOp = NULL;
-		highOp = NULL;
+		// lowOp = NULL;
+		// highOp = NULL;
 
 	}
 
