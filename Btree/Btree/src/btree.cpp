@@ -493,12 +493,15 @@ namespace badgerdb
 		std::cout << "Reached start scan pre-exception check";
 		//throw necessary exceptions given bad input
 		if(lowValParm > highValParm){
+			std::cout << "Throwing Bad Scan Range Exception";
 			throw BadScanrangeException();
 		}
-		if(lowOpParm != 2  || lowOpParm != 3){
+		if(lowOpParm != GT  && lowOpParm != GTE){
+			std::cout << "Throwing Bad OPCODES Exception";
 			throw BadOpcodesException();
 		}
-		if(highOpParm != 0 || highOpParm != 1){
+		if(highOpParm != LT && highOpParm != LTE){
+			std::cout << "Throwing Bad OPCODES Exception";
 			throw BadOpcodesException();
 		}
 
@@ -512,7 +515,7 @@ namespace badgerdb
 
 		std::cout << "Successfully set the global scan variables: " << "LowVal|HighVal|LowOp|HighOp" << lowValInt << "|" << highValInt << "|" << lowOp << "|" << highOp << "|";
 		
-		if(lowOpParm == 2){
+		if(lowOpParm == GT){
 			LeafNodeInt* currPage = findLeafNode((const void*)(lowValInt + 1) , indexMetaInfo.rootPageNo);
 			currentPageData = (Page*) currPage;
 			currentPageNum = ((Page*) currPage)->page_number();
@@ -524,7 +527,7 @@ namespace badgerdb
 				}
 			}
 		}
-		else if(lowOpParm == 3){
+		else if(lowOpParm == GTE){
 			LeafNodeInt* currPage = findLeafNode(lowValParm, indexMetaInfo.rootPageNo);
 			currentPageData = (Page*) currPage;
 			currentPageNum = ((Page*) currPage)->page_number();
@@ -558,27 +561,27 @@ namespace badgerdb
 			nextEntry = 0;
 		}
 		if (currentLeafNode == NULL) {
-			throw new IndexScanCompletedException;
+			throw IndexScanCompletedException();
 		}
 
 		int currentKey = currentLeafNode->keyArray[nextEntry];
 
 		//get the next recordId on the current page
-		if (highOp == 0) {
+		if (highOp == LT) {
 			if (currentKey < highValInt) {
 				outRid = currentLeafNode->ridArray[nextEntry];
 				nextEntry++;
 			}
 			else {
-				throw new IndexScanCompletedException;
+				throw IndexScanCompletedException();
 			}
 		} 
-		else if (highOp == 1) {
+		else if (highOp == LTE) {
 			if (currentKey <= highValInt) {
 				outRid = currentLeafNode->ridArray[nextEntry];
 				nextEntry++;
 			} else {
-				throw new IndexScanCompletedException;
+				throw IndexScanCompletedException();
 			}
 		}
 

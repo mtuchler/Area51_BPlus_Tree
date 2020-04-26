@@ -387,7 +387,7 @@ int intScan(BTreeIndex * index, int lowVal, Operator lowOp, int highVal, Operato
   RecordId scanRid;
 	Page *curPage;
 
-  std::cout << "Scan for ";
+  std::cout << "Scan for: ";
   if( lowOp == GT ) { std::cout << "("; } else { std::cout << "["; }
   std::cout << lowVal << "," << highVal;
   if( highOp == LT ) { std::cout << ")"; } else { std::cout << "]"; }
