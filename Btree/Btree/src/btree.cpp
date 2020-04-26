@@ -328,7 +328,7 @@ namespace badgerdb
 		Page* page = &file->readPage(pageNo);
 		NonLeafNodeInt* node = (NonLeafNodeInt*) page;
 
-		int keyInt = (int)key;
+		int* keyInt = (int*)key;
 
 		// initialize temporary arrays for key and rid storage
 		// size = num of records in full array + 1 being added
@@ -337,8 +337,8 @@ namespace badgerdb
 		// following code block inserts everything into arr1[] and arr2[]
 		int offset = 0;
 		for(int i = 0; i < node->numKeys; i++){
-			if(keyInt < node->keyArray[i] && offset == 0){
-				arr1[i] = keyInt;
+			if(*keyInt < node->keyArray[i] && offset == 0){
+				arr1[i] = *keyInt;
 				arr2[i] = &pageNo;
 				offset = 1;
 				i--;
@@ -408,18 +408,18 @@ namespace badgerdb
 				PageId* newPageNo = (PageId*) newNode;
 				// perform a bubble insert of the key
 				for (int i = 0; i < parent->numKeys; i++){
-					if (keyInt < parent->keyArray[i]) {
+					if (*keyInt < parent->keyArray[i]) {
 						int key_temp = parent->keyArray[i];
 						PageId* page_temp = &parent->pageNoArray[i];
 
-						parent->keyArray[i] = keyInt;
+						parent->keyArray[i] = *keyInt;
 						parent->pageNoArray[i] = *newPageNo;
 
-						keyInt = key_temp;
+						*keyInt = key_temp;
 						newPageNo = page_temp;
 					}
 				}
-				parent->keyArray[parent->numKeys] = keyInt;
+				parent->keyArray[parent->numKeys] = *keyInt;
 				PageId page_temp = parent->pageNoArray[parent->numKeys];
 				parent->pageNoArray[parent->numKeys] = *newPageNo;
 				parent->pageNoArray[parent->numKeys+1] = page_temp;
