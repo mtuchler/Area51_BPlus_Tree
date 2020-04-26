@@ -474,6 +474,7 @@ namespace badgerdb
 					const void* highValParm,
 					const Operator highOpParm)
 	{
+		std::cout << "Reached start scan pre-exception check";
 		//throw necessary exceptions given bad input
 		if(lowValParm > highValParm){
 			throw new BadScanrangeException;
@@ -485,16 +486,16 @@ namespace badgerdb
 			throw new BadOpcodesException;
 		}
 
-
+		std::cout << "Reached start scan (no badOpcodes or bad scanrange)";
 
 		scanExecuting = true; 
 		lowValInt = (int) lowValParm;
 		highValInt = (int) highValParm;
 		lowOp = lowOpParm;
 		highOp = highOpParm;
+
+		std::cout << "Successfully set the global scan variables: " << "LowVal|HighVal|LowOp|HighOp" << lowValInt << "|" << highValInt << "|" << lowOp << "|" << highOp << "|";
 		
-
-
 		if(lowOpParm == 'GT'){
 			LeafNodeInt* currPage = findLeafNode((const void*)(lowValInt + 1) , indexMetaInfo.rootPageNo);
 			currentPageData = (Page*) currPage;
@@ -502,6 +503,7 @@ namespace badgerdb
 			for(int i = 0; i < currPage->numKeys; i++){
 				if(currPage->keyArray[i] > lowValInt){
 					nextEntry = i;
+					std::cout << "NextEntry set to: " << nextEntry;
 					break;
 				}
 			}
@@ -513,6 +515,7 @@ namespace badgerdb
 			for(int i = 0; i < currPage->numKeys; i++){
 				if(currPage->keyArray[i] >= lowValInt){
 					nextEntry = i;
+					std::cout << "NextEntry set to: " << nextEntry;
 					break;
 				}
 			}
@@ -525,7 +528,42 @@ namespace badgerdb
 
 	const void BTreeIndex::scanNext(RecordId& outRid) 
 	{
-		
+		std::cout << "Entered ScanNext()" << nextEntry;
+
+		LeafNodeInt* currentLeafNode = (LeafNodeInt*)currentPageData;
+
+		//if the next entry is larger than the keys in the array, a new page is needed
+		if (nextEntry == currentLeafNode->numKeys) {
+			currentPageNum = currentLeafNode->rightSibPageNo;
+			currentPageData = &file->readPage(currentLeafNode->rightSibPageNo);
+			currentLeafNode = (LeafNodeInt*) currentPageData;
+			nextEntry = 0;
+		}
+		if (currentLeafNode == NULL) {
+			throw new IndexScanCompletedException;
+		}
+
+		int currentKey = currentLeafNode->keyArray[nextEntry];
+
+		//get the next recordId on the current page
+		if (highOp == 'LT') {
+			if (currentKey < highValInt) {
+				outRid = currentLeafNode->ridArray[nextEntry];
+				nextEntry++;
+			}
+			else {
+				throw new IndexScanCompletedException;
+			}
+		} 
+		else if (highOp == 'LTE') {
+			if (currentKey <= highValInt) {
+				outRid = currentLeafNode->ridArray[nextEntry];
+				nextEntry++;
+			} else {
+				throw new IndexScanCompletedException;
+			}
+		}
+
 	}
 
 	// -----------------------------------------------------------------------------
