@@ -110,7 +110,7 @@ namespace badgerdb
 	const void BTreeIndex::insertEntry(const void *key, const RecordId rid) 
 	{
 		// Begin searching for the place to insert at the root
-		Page* page = &file->readPage(indexMetaInfo.rootPageNo);
+		Page page = file->readPage(indexMetaInfo.rootPageNo);
 
 		int keyInt = (int)key;
 
@@ -119,7 +119,7 @@ namespace badgerdb
 		// Case: the root is a leaf (B+ tree has one node)
 		if(indexMetaInfo.isLeaf == true){
 			// In this case, we can safely cast the root page to a LeafNodeInt
-			LeafNodeInt* root = (LeafNodeInt*) page;
+			LeafNodeInt* root = (LeafNodeInt*) &page;
 			// This is a strange place to set the root's parent pointer but it works
 			root->parent = NULL;
 			
@@ -156,7 +156,7 @@ namespace badgerdb
 		// Case: the root is not a leaf (i.e. tree level > 1)
 		else{
 			// keep track of root node
-			NonLeafNodeInt* root = (NonLeafNodeInt*) page;
+			NonLeafNodeInt* root = (NonLeafNodeInt*) &page;
 			// returns the leaf node where the data goes
 			LeafNodeInt* node = findLeafNode(key, indexMetaInfo.rootPageNo);
 
@@ -479,10 +479,10 @@ namespace badgerdb
 		if(lowValParm > highValParm){
 			throw new BadScanrangeException;
 		}
-		if(lowOpParm != 'GT' || lowOpParm != 'GTE'){
+		if(lowOpParm != 2  || lowOpParm != 3){
 			throw new BadOpcodesException;
 		}
-		if(highOpParm != 'LT' || highOpParm != 'LTE'){
+		if(highOpParm != 0 || highOpParm != 1){
 			throw new BadOpcodesException;
 		}
 
@@ -496,7 +496,7 @@ namespace badgerdb
 
 		std::cout << "Successfully set the global scan variables: " << "LowVal|HighVal|LowOp|HighOp" << lowValInt << "|" << highValInt << "|" << lowOp << "|" << highOp << "|";
 		
-		if(lowOpParm == 'GT'){
+		if(lowOpParm == 2){
 			LeafNodeInt* currPage = findLeafNode((const void*)(lowValInt + 1) , indexMetaInfo.rootPageNo);
 			currentPageData = (Page*) currPage;
 			currentPageNum = ((Page*) currPage)->page_number();
@@ -508,7 +508,7 @@ namespace badgerdb
 				}
 			}
 		}
-		else if(lowOpParm == 'GTE'){
+		else if(lowOpParm == 3){
 			LeafNodeInt* currPage = findLeafNode(lowValParm, indexMetaInfo.rootPageNo);
 			currentPageData = (Page*) currPage;
 			currentPageNum = ((Page*) currPage)->page_number();
@@ -546,7 +546,7 @@ namespace badgerdb
 		int currentKey = currentLeafNode->keyArray[nextEntry];
 
 		//get the next recordId on the current page
-		if (highOp == 'LT') {
+		if (highOp == 0) {
 			if (currentKey < highValInt) {
 				outRid = currentLeafNode->ridArray[nextEntry];
 				nextEntry++;
@@ -555,7 +555,7 @@ namespace badgerdb
 				throw new IndexScanCompletedException;
 			}
 		} 
-		else if (highOp == 'LTE') {
+		else if (highOp == 1) {
 			if (currentKey <= highValInt) {
 				outRid = currentLeafNode->ridArray[nextEntry];
 				nextEntry++;
