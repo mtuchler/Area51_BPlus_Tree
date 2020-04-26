@@ -50,7 +50,7 @@ namespace badgerdb
 		outIndexName = idxStr.str();
 
 		//sets the information for the indexMetaInfo (first page of the index file)
-		strcpy(indexMetaInfo.relationName,relationName.c_str);
+		strcpy(indexMetaInfo.relationName,relationName.c_str());
 		indexMetaInfo.attrByteOffset = attrByteOffset;
 		indexMetaInfo.attrType = attrType;
 		indexMetaInfo.isLeaf = true; //root is a leaf
@@ -110,16 +110,18 @@ namespace badgerdb
 	const void BTreeIndex::insertEntry(const void *key, const RecordId rid) 
 	{
 		// Begin searching for the place to insert at the root
-		Page* page = &file->readPage(indexMetaInfo.rootPageNo);
+		Page* bufMgrPage;
+		bufMgr->readPage(file,indexMetaInfo.rootPageNo,bufMgrPage);
+		Page page = *bufMgrPage;//file->readPage(indexMetaInfo.rootPageNo);
 
-		int keyInt = (int)key;
+		int* keyInt = (int*)key;
 
 		RecordId currRid = rid;
 
 		// Case: the root is a leaf (B+ tree has one node)
 		if(indexMetaInfo.isLeaf == true){
 			// In this case, we can safely cast the root page to a LeafNodeInt
-			LeafNodeInt* root = (LeafNodeInt*) page;
+			LeafNodeInt* root = (LeafNodeInt*) &page;
 			// This is a strange place to set the root's parent pointer but it works
 			root->parent = NULL;
 			
@@ -134,20 +136,20 @@ namespace badgerdb
 			// bubble insert the key and rid into their places
 			else{
 				for(int i = 0; i < root->numKeys; i ++){
-					if(keyInt < root->keyArray[i]){
+					if(*keyInt < root->keyArray[i]){
 						int key_temp = root->keyArray[i];
 						RecordId rid_temp = root->ridArray[i];
 
-						root->keyArray[i] = keyInt;
+						root->keyArray[i] = *keyInt;
 						root->ridArray[i] = rid;
 						
-						keyInt = key_temp;
+						*keyInt = key_temp;
 						currRid = rid_temp;
 					}
 				}
 				// after loop, insert i = root.numKeys, and
 				// key and rid need to be inserted at the end
-				root->keyArray[root->numKeys] = keyInt;
+				root->keyArray[root->numKeys] = *keyInt;
 				root->ridArray[root->numKeys] = currRid;
 				// also, numKeys gets a new friend :)
 				root->numKeys++;
@@ -156,7 +158,7 @@ namespace badgerdb
 		// Case: the root is not a leaf (i.e. tree level > 1)
 		else{
 			// keep track of root node
-			NonLeafNodeInt* root = (NonLeafNodeInt*) page;
+			NonLeafNodeInt* root = (NonLeafNodeInt*) &page;
 			// returns the leaf node where the data goes
 			LeafNodeInt* node = findLeafNode(key, indexMetaInfo.rootPageNo);
 
@@ -172,19 +174,19 @@ namespace badgerdb
 			// perform bubble insert of key and rid
 			else{
 				for(int i = 0; i < node->numKeys; i ++){
-					if(keyInt < node->keyArray[i]){
+					if(*keyInt < node->keyArray[i]){
 						int key_temp = node->keyArray[i];
 						RecordId rid_temp = node->ridArray[i];
 
-						node->keyArray[i] = keyInt;
+						node->keyArray[i] = *keyInt;
 						node->ridArray[i] = currRid;
 						
-						keyInt = key_temp;
+						*keyInt = key_temp;
 						currRid = rid_temp;
 					}
 				}
 				// after insert, i = numKeys + 1 and key and rid need insertion
-				node->keyArray[node->numKeys] = keyInt;
+				node->keyArray[node->numKeys] = *keyInt;
 				node->ridArray[node->numKeys] = currRid;
 				// numKeys makes a new friend
 				node->numKeys++;
@@ -202,10 +204,12 @@ namespace badgerdb
 	// -------------------------------------------------------------
 	const void BTreeIndex::splitLeafNode(const void *key, const RecordId rid,  PageId pageNo){
 		// cast node being split into a leaf node struct
-		Page* page = &file->readPage(pageNo);
+		Page* bufMgrPage;
+		bufMgr->readPage(file,pageNo,bufMgrPage);
+		Page* page = bufMgrPage;//&file->readPage(pageNo);
 		LeafNodeInt* node = (LeafNodeInt*) page;
 
-		int keyInt = (int)key;
+		int* keyInt = (int*)key;
 		RecordId currRid = rid;
 
 		// initialize temporary arrays for key and rid storage
@@ -215,8 +219,8 @@ namespace badgerdb
 		// following code block inserts everything into arr1[] and arr2[]
 		int offset = 0;
 		for(int i = 0; i < node->numKeys; i++){
-			if(keyInt < node->keyArray[i] && offset == 0){
-				arr1[i] = keyInt;
+			if(*keyInt < node->keyArray[i] && offset == 0){
+				arr1[i] = *keyInt;
 				arr2[i] = currRid;
 				offset = 1;
 				i--;
@@ -253,7 +257,7 @@ namespace badgerdb
 		// update sibling pointers
 		// newNode goes to the right of oldNode
 		newNode->rightSibPageNo = oldNode->rightSibPageNo;
-		oldNode->rightSibPageNo = (PageId)newNode;
+		oldNode->rightSibPageNo = *newPageNo;
 		// give newNode a parent
 		newNode->parent = oldNode->parent;
 
@@ -282,7 +286,9 @@ namespace badgerdb
 		else{
 			// call out parent
 			PageId parentPageId = oldNode->parent;
-			NonLeafNodeInt* parent = (NonLeafNodeInt*)&file->readPage(parentPageId);
+			Page* bufMgrPage;
+			bufMgr->readPage(file,parentPageId,bufMgrPage);
+			NonLeafNodeInt* parent = (NonLeafNodeInt*)bufMgrPage;//&file->readPage(parentPageId);
 			// Case: parent has space for new key
 			if (parent->numKeys < INTARRAYNONLEAFSIZE) {
 				// create variable for PageNo
@@ -290,19 +296,19 @@ namespace badgerdb
 				// perform a bubble insert of the key
 				for (int i = 0; i < parent->numKeys; i++){
 
-					if (keyInt < parent->keyArray[i]) {
+					if (*keyInt < parent->keyArray[i]) {
 						int key_temp = parent->keyArray[i];
 						PageId* page_temp = &parent->pageNoArray[i];
 
-						parent->keyArray[i] = keyInt;
+						parent->keyArray[i] = *keyInt;
 						parent->pageNoArray[i] = *newPageNo;
 
-						keyInt = key_temp;
+						*keyInt = key_temp;
 						newPageNo = page_temp;
 					}
 
 				}
-				parent->keyArray[parent->numKeys] = keyInt;
+				parent->keyArray[parent->numKeys] = *keyInt;
 				PageId page_temp = parent->pageNoArray[parent->numKeys];
 				parent->pageNoArray[parent->numKeys] = *newPageNo;
 				parent->pageNoArray[parent->numKeys+1] = page_temp;
@@ -325,10 +331,12 @@ namespace badgerdb
 	//--------------------------------------------------------------------
 	const void BTreeIndex::splitNonLeafNode(const void *key, PageId pageNo) {
 		// cast node being split into a leaf node struct
-		Page* page = &file->readPage(pageNo);
+		Page* bufMgrPage;
+		bufMgr->readPage(file,pageNo,bufMgrPage);
+		Page* page = bufMgrPage;//&file->readPage(pageNo);
 		NonLeafNodeInt* node = (NonLeafNodeInt*) page;
 
-		int keyInt = (int)key;
+		int* keyInt = (int*)key;
 
 		// initialize temporary arrays for key and rid storage
 		// size = num of records in full array + 1 being added
@@ -337,8 +345,8 @@ namespace badgerdb
 		// following code block inserts everything into arr1[] and arr2[]
 		int offset = 0;
 		for(int i = 0; i < node->numKeys; i++){
-			if(keyInt < node->keyArray[i] && offset == 0){
-				arr1[i] = keyInt;
+			if(*keyInt < node->keyArray[i] && offset == 0){
+				arr1[i] = *keyInt;
 				arr2[i] = &pageNo;
 				offset = 1;
 				i--;
@@ -401,25 +409,27 @@ namespace badgerdb
 		else{
 			// call out parent
 			PageId parentPageId = oldNode->parent;
-			NonLeafNodeInt* parent = (NonLeafNodeInt*)&file->readPage(parentPageId);
+			Page* bufMgrPage;
+			bufMgr->readPage(file,parentPageId,bufMgrPage);
+			NonLeafNodeInt* parent = (NonLeafNodeInt*)bufMgrPage;//(NonLeafNodeInt*)&file->readPage(parentPageId);
 			// Case: parent has space for new key
 			if (parent->numKeys < INTARRAYNONLEAFSIZE) {
 				// create variable for PageNo
 				PageId* newPageNo = (PageId*) newNode;
 				// perform a bubble insert of the key
 				for (int i = 0; i < parent->numKeys; i++){
-					if (keyInt < parent->keyArray[i]) {
+					if (*keyInt < parent->keyArray[i]) {
 						int key_temp = parent->keyArray[i];
 						PageId* page_temp = &parent->pageNoArray[i];
 
-						parent->keyArray[i] = keyInt;
+						parent->keyArray[i] = *keyInt;
 						parent->pageNoArray[i] = *newPageNo;
 
-						keyInt = key_temp;
+						*keyInt = key_temp;
 						newPageNo = page_temp;
 					}
 				}
-				parent->keyArray[parent->numKeys] = keyInt;
+				parent->keyArray[parent->numKeys] = *keyInt;
 				PageId page_temp = parent->pageNoArray[parent->numKeys];
 				parent->pageNoArray[parent->numKeys] = *newPageNo;
 				parent->pageNoArray[parent->numKeys+1] = page_temp;
@@ -443,21 +453,27 @@ namespace badgerdb
 	// returns:	the LeafNodeInt* where the key is in range
 	//--------------------------------------------------------------------
 	LeafNodeInt* BTreeIndex::findLeafNode(const void *key, PageId pageNo){
-		Page* page = &file->readPage(pageNo);
+		Page* bufMgrPage;
+		bufMgr->readPage(file,pageNo,bufMgrPage);
+		Page* page = bufMgrPage; //&file->readPage(pageNo);
 		NonLeafNodeInt* node = (NonLeafNodeInt*) page;
 		int i;
-		int keyInt = (int)key;
+		int* keyInt = (int*)key;
 		if(node->level == 1){
 			for(i = 0; i < node->numKeys - 1; i++){
-				if(keyInt < node->keyArray[i]){
-					return (LeafNodeInt*)&file->readPage(node->pageNoArray[i]);
+				if(*keyInt < node->keyArray[i]){
+					Page* bufMgrPage;
+					bufMgr->readPage(file,node->pageNoArray[i],bufMgrPage);
+					return (LeafNodeInt*)bufMgrPage;//&file->readPage(node->pageNoArray[i]);
 				}
 			}
-			return (LeafNodeInt*)&file->readPage(node->pageNoArray[node->numKeys]);
+			Page* bufMgrPage;
+			bufMgr->readPage(file,node->pageNoArray[node->numKeys],bufMgrPage);
+			return (LeafNodeInt*)bufMgrPage;//&file->readPage(node->pageNoArray[node->numKeys]);
 		}
 		else if(node->level == 0){
 			for(i = 0; i < node->numKeys - 1; i++){
-				if(keyInt < node->keyArray[i]){
+				if(*keyInt < node->keyArray[i]){
 					return findLeafNode(key, node->pageNoArray[i]);
 				}
 			}
@@ -474,45 +490,48 @@ namespace badgerdb
 					const void* highValParm,
 					const Operator highOpParm)
 	{
+		std::cout << "Reached start scan pre-exception check";
 		//throw necessary exceptions given bad input
 		if(lowValParm > highValParm){
-			throw new BadScanrangeException;
+			throw BadScanrangeException();
 		}
-		if(lowOpParm != 'GT' || lowOpParm != 'GTE'){
-			throw new BadOpcodesException;
+		if(lowOpParm != 2  || lowOpParm != 3){
+			throw BadOpcodesException();
 		}
-		if(highOpParm != 'LT' || highOpParm != 'LTE'){
-			throw new BadOpcodesException;
+		if(highOpParm != 0 || highOpParm != 1){
+			throw BadOpcodesException();
 		}
 
-
+		std::cout << "Reached start scan (no badOpcodes or bad scanrange)";
 
 		scanExecuting = true; 
-		lowValInt = (int) lowValParm;
-		highValInt = (int) highValParm;
+		lowValInt = *((int*) lowValParm);
+		highValInt = *((int*) highValParm);
 		lowOp = lowOpParm;
 		highOp = highOpParm;
+
+		std::cout << "Successfully set the global scan variables: " << "LowVal|HighVal|LowOp|HighOp" << lowValInt << "|" << highValInt << "|" << lowOp << "|" << highOp << "|";
 		
-
-
-		if(lowOpParm == 'GT'){
+		if(lowOpParm == 2){
 			LeafNodeInt* currPage = findLeafNode((const void*)(lowValInt + 1) , indexMetaInfo.rootPageNo);
 			currentPageData = (Page*) currPage;
 			currentPageNum = ((Page*) currPage)->page_number();
 			for(int i = 0; i < currPage->numKeys; i++){
 				if(currPage->keyArray[i] > lowValInt){
 					nextEntry = i;
+					std::cout << "NextEntry set to: " << nextEntry;
 					break;
 				}
 			}
 		}
-		else if(lowOpParm == 'GTE'){
+		else if(lowOpParm == 3){
 			LeafNodeInt* currPage = findLeafNode(lowValParm, indexMetaInfo.rootPageNo);
 			currentPageData = (Page*) currPage;
 			currentPageNum = ((Page*) currPage)->page_number();
 			for(int i = 0; i < currPage->numKeys; i++){
 				if(currPage->keyArray[i] >= lowValInt){
 					nextEntry = i;
+					std::cout << "NextEntry set to: " << nextEntry;
 					break;
 				}
 			}
@@ -525,7 +544,44 @@ namespace badgerdb
 
 	const void BTreeIndex::scanNext(RecordId& outRid) 
 	{
-		
+		std::cout << "Entered ScanNext()" << nextEntry;
+
+		LeafNodeInt* currentLeafNode = (LeafNodeInt*)currentPageData;
+
+		//if the next entry is larger than the keys in the array, a new page is needed
+		if (nextEntry == currentLeafNode->numKeys) {
+			currentPageNum = currentLeafNode->rightSibPageNo;
+			Page* bufMgrPage;
+			bufMgr->readPage(file,currentLeafNode->rightSibPageNo,bufMgrPage);
+			currentPageData = bufMgrPage; // &file->readPage(currentLeafNode->rightSibPageNo);
+			currentLeafNode = (LeafNodeInt*) currentPageData;
+			nextEntry = 0;
+		}
+		if (currentLeafNode == NULL) {
+			throw new IndexScanCompletedException;
+		}
+
+		int currentKey = currentLeafNode->keyArray[nextEntry];
+
+		//get the next recordId on the current page
+		if (highOp == 0) {
+			if (currentKey < highValInt) {
+				outRid = currentLeafNode->ridArray[nextEntry];
+				nextEntry++;
+			}
+			else {
+				throw new IndexScanCompletedException;
+			}
+		} 
+		else if (highOp == 1) {
+			if (currentKey <= highValInt) {
+				outRid = currentLeafNode->ridArray[nextEntry];
+				nextEntry++;
+			} else {
+				throw new IndexScanCompletedException;
+			}
+		}
+
 	}
 
 	// -----------------------------------------------------------------------------

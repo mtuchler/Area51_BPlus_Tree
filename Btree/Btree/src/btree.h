@@ -367,7 +367,7 @@ class BTreeIndex {
 	// key:		the key that causes overflow
 	// pageNo:	something
 	//--------------------------------------------------------------------
-	const void BTreeIndex::splitNonLeafNode(const void *key, PageId pageNo);
+	const void splitNonLeafNode(const void *key, PageId pageNo);
 
   //--------------------------------------------------------------------
 	// @brief	findLeafNode traverses the tree downwards to find the
@@ -376,7 +376,7 @@ class BTreeIndex {
 	// pageNo:	a NonLeafNodeInt* that will serve as the start of the search
 	// returns:	the LeafNodeInt* where the key is in range
 	//--------------------------------------------------------------------
-	LeafNodeInt* BTreeIndex::findLeafNode(const void *key, PageId pageNo);
+	LeafNodeInt* findLeafNode(const void *key, PageId pageNo);
 
 
   /**

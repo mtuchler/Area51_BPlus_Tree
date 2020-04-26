@@ -137,8 +137,11 @@ int main(int argc, char **argv)
 
 	File::remove(relationName);
 
+	std::cout << "entering test1" << std::endl;
 	test1();
+	std::cout << "entering test2";
 	test2();
+	std::cout << "entering test3";
 	test3();
 	//errorTests();
 
@@ -309,7 +312,7 @@ void createRelationRandom()
 	int i = 0;
   while( i < relationSize )
   {
-    pos = random() % (relationSize-i);
+    pos = rand() % (relationSize-i);
     val = intvec[pos];
     sprintf(record1.s, "%05d string record", val);
     record1.i = val;
@@ -365,8 +368,9 @@ void indexTests()
 
 void intTests()
 {
-  std::cout << "Create a B+ Tree index on the integer field" << std::endl;
+  std::cout << "Create a B+ Tree index on the integer field !!!!!!!!" << std::endl;
   BTreeIndex index(relationName, intIndexName, bufMgr, offsetof(tuple,i), INTEGER);
+	std::cout << "Index Created" << std::endl;
 
 	// run some tests
 	checkPassFail(intScan(&index,25,GT,40,LT), 14)
@@ -390,10 +394,12 @@ int intScan(BTreeIndex * index, int lowVal, Operator lowOp, int highVal, Operato
   std::cout << std::endl;
 
   int numResults = 0;
-	
+	std::cout <<"Immediately before try-catch";
 	try
 	{
-  	index->startScan(&lowVal, lowOp, &highVal, highOp);
+		std::cout <<"Calling index-> startScan";
+  		index->startScan(&lowVal, lowOp, &highVal, highOp);
+		std::cout <<"Index-> startScan SUCCESS!";
 	}
 	catch(NoSuchKeyFoundException e)
 	{
