@@ -394,12 +394,12 @@ int intScan(BTreeIndex * index, int lowVal, Operator lowOp, int highVal, Operato
   std::cout << std::endl;
 
   int numResults = 0;
-	std::cout <<"Immediately before try-catch";
+	std::cout <<"Immediately before try-catch" << std::endl;
 	try
 	{
-		std::cout <<"Calling index-> startScan";
+		std::cout <<"Calling index-> startScan"<< std::endl;
   		index->startScan(&lowVal, lowOp, &highVal, highOp);
-		std::cout <<"Index-> startScan SUCCESS!";
+		std::cout <<"Index-> startScan SUCCESS!"<< std::endl;
 	}
 	catch(NoSuchKeyFoundException e)
 	{
