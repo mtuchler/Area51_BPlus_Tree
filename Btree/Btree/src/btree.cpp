@@ -540,30 +540,30 @@ namespace badgerdb
 		std::cout << "node level: " << node->level << std::endl;
 
 		if(node->level == 1){
-			for(int i = 0; i < node->numKeys - 1; i++){
+			for(int i = 0; i < node->numKeys; i++){
 				if(key < node->keyArray[i]){
 					Page* new_bufMgrPage;
 					bufMgr->readPage(file,node->pageNoArray[i],new_bufMgrPage);
 					foundLeafPageNo = node->pageNoArray[i];
-					bufMgr->unPinPage(file, pageNo, false);
+					//bufMgr->unPinPage(file, pageNo, false);
 					return (LeafNodeInt*)new_bufMgrPage;//&file->readPage(node->pageNoArray[i]);
 				}
 			}
 			Page* new_bufPage;
 			bufMgr->readPage(file,node->pageNoArray[node->numKeys],new_bufPage);
 			foundLeafPageNo = node->pageNoArray[node->numKeys];
-			bufMgr->unPinPage(file, pageNo, false);
+			//bufMgr->unPinPage(file, pageNo, false);
 			return (LeafNodeInt*)new_bufPage;//&file->readPage(node->pageNoArray[node->numKeys]);
 		}
 		//else, node level must be 0
 		else if(node->level == 0) {
-			for(int i = 0; i < node->numKeys - 1; i++){
+			for(int i = 0; i < node->numKeys; i++){
 				if(key < node->keyArray[i]){
 					bufMgr->unPinPage(file, pageNo, false);
 					return findLeafNode(key, node->pageNoArray[i]);
 				}
 			}
-			bufMgr->unPinPage(file, pageNo, false);
+			//bufMgr->unPinPage(file, pageNo, false);
 			return findLeafNode(key, node->pageNoArray[node->numKeys]);
 		}
 	}
