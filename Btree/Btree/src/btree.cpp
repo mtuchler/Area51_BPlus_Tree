@@ -15,6 +15,7 @@
 #include "exceptions/index_scan_completed_exception.h"
 #include "exceptions/file_not_found_exception.h"
 #include "exceptions/end_of_file_exception.h"
+#include "exceptions/page_not_pinned_exception.h"
 
 
 //#define DEBUG
@@ -24,14 +25,14 @@ namespace badgerdb
 	LeafNodeInt *BTreeIndex::CreateLeafNode(PageId &newPageId) {
 		Page* newNode;
 		bufMgr->allocPage(file,newPageId, newNode);
-		((LeafNodeInt*) newNode)->numKeys = 1;
+		((LeafNodeInt*) newNode)->numKeys = 0;
   		return (LeafNodeInt*) newNode;
 	}
 
 	NonLeafNodeInt *BTreeIndex::CreateNonLeafNode(PageId &newPageId) {
 		Page *newNode;
 		bufMgr->allocPage(file, newPageId,newNode);
-		((NonLeafNodeInt*) newNode)->numKeys = 1;
+		((NonLeafNodeInt*) newNode)->numKeys = 0;
 		((NonLeafNodeInt*) newNode)->level = 0;
 		return (NonLeafNodeInt*) newNode;
 	}
@@ -68,9 +69,6 @@ namespace badgerdb
 		//creates a leaf node for the root of the index
 		LeafNodeInt* node = CreateLeafNode(indexMetaInfo.rootPageNo);
 
-		LeafNodeInt* bufMgrPage;
-		bufMgr->readPage(file,indexMetaInfo.rootPageNo,(Page*&)bufMgrPage);
-
 		//unPins the page that was pinned to create the leaf node
   		bufMgr->unPinPage(file, indexMetaInfo.rootPageNo, true);
 
@@ -92,7 +90,7 @@ namespace badgerdb
 			}
 		} catch (EndOfFileException e) {
 			bufMgrIn = bufMgr;
-			LeafNodeInt* leaf = findLeafNode(1,indexMetaInfo.rootPageNo);
+			//LeafNodeInt* leaf = findLeafNode(1,indexMetaInfo.rootPageNo);
 		}
 
 	}
@@ -120,6 +118,8 @@ namespace badgerdb
 		Page* page;
 		bufMgr->readPage(file,indexMetaInfo.rootPageNo,page);
 
+		std::cout << "Root Page No: " << indexMetaInfo.rootPageNo << std::endl;
+
 		int keyInt = *(int*)key;
 
 		RecordId currRid = rid;
@@ -130,14 +130,22 @@ namespace badgerdb
 			LeafNodeInt* root = (LeafNodeInt*) page;
 			// This is a strange place to set the root's parent pointer but it works
 			root->parent = -1;
-
+			std::cout << "KeyInt: " << keyInt << std::endl;
+			std::cout << "rid: " << rid.page_number << "-" << rid.slot_number << std::endl;
+			std::cout << "root->keyArray: " << root->keyArray << std::endl;
+			std::cout << "root->numKeys: " << root->numKeys << std::endl;
+			std::cout << "root->ridArray: " << root->ridArray << std::endl;
 			// Case: The root node is full during the insert
 			// perform leaf node split
 			if(root->numKeys == INTARRAYLEAFSIZE){
-				splitLeafNode(key,rid, indexMetaInfo.rootPageNo);
+				splitLeafNode(keyInt,rid, indexMetaInfo.rootPageNo);
 				indexMetaInfo.isLeaf = false;
 			}
-
+			else if (root->numKeys == 0) {
+				root->keyArray[0] = keyInt;
+				root->ridArray[0] = rid;
+				root->numKeys++;
+			}
 			// Case: root has space to insert
 			// bubble insert the key and rid into their places
 			else{
@@ -168,16 +176,20 @@ namespace badgerdb
 			// keep track of root node
 			//NonLeafNodeInt* root = (NonLeafNodeInt*) &page;
 			// returns the leaf node where the data goes
-			LeafNodeInt* node = findLeafNode(*(int*) key, indexMetaInfo.rootPageNo);
+			LeafNodeInt* node = findLeafNode(keyInt, indexMetaInfo.rootPageNo);
 
 			Page* nodePage = (Page *) node;
 
 			// Case: leaf node is full
 			// perform leaf node split
 			if(node->numKeys == INTARRAYLEAFSIZE){
-				splitLeafNode(key,rid,nodePage->page_number());
+				splitLeafNode(keyInt,rid,foundLeafPageNo);
 			}
-
+			else if (node->numKeys == 0) {
+				node->keyArray[0] = keyInt;
+				node->ridArray[0] = rid;
+				node->numKeys++;
+			}
 			// Case: leaf node has space
 			// perform bubble insert of key and rid
 			else{
@@ -198,8 +210,16 @@ namespace badgerdb
 				node->ridArray[node->numKeys] = currRid;
 				// numKeys makes a new friend
 				node->numKeys++;
+
+				bufMgr->unPinPage(file,foundLeafPageNo,true);
 			}
-			bufMgr->unPinPage(file,indexMetaInfo.rootPageNo,true);
+			try {
+				bufMgr->unPinPage(file,indexMetaInfo.rootPageNo,true);
+			}
+			catch (PageNotPinnedException e) {
+
+			}
+			
 		}
 	}
 
@@ -211,14 +231,14 @@ namespace badgerdb
 	// pageNo:	the pointer to the node being split
 	// returns:	void
 	// -------------------------------------------------------------
-	const void BTreeIndex::splitLeafNode(const void *key, const RecordId rid,  PageId pageNo){
+	const void BTreeIndex::splitLeafNode(int key, const RecordId rid,  PageId pageNo){
 		// cast node being split into a leaf node struct
 		Page* bufMgrPage;
 		bufMgr->readPage(file,pageNo,bufMgrPage);
 		Page* page = bufMgrPage;//&file->readPage(pageNo);
 		LeafNodeInt* node = (LeafNodeInt*) page;
 
-		int keyInt = *(int*)key;
+		int keyInt = key;
 		RecordId currRid = rid;
 
 		// initialize temporary arrays for key and rid storage
@@ -238,6 +258,11 @@ namespace badgerdb
 				arr1[i+offset] = node->keyArray[i];
 				arr2[i+offset] = node->ridArray[i];
 			}
+		}
+		//key and rid were never entered!
+		if (offset == 0) {
+			arr1[node->numKeys] = keyInt;
+			arr2[node->numKeys] = currRid;
 		}
 
 		// splitIndex is the index of the median key, and it points to
@@ -282,6 +307,7 @@ namespace badgerdb
 			// set the info that makes it a root
 			newRoot->parent = -1;
 			newRoot->level = 1;
+			std::cout << "Printing newRootPageNo: " << newRootPageNo << std::endl;
 			indexMetaInfo.rootPageNo = newRootPageNo;
 			// set each child's parent field
 			newNode->parent = newRootPageNo;
@@ -308,16 +334,16 @@ namespace badgerdb
 			// Case: parent has space for new key
 			if (parent->numKeys < INTARRAYNONLEAFSIZE) {
 				// create variable for PageNo
-				PageId* newPageNo = (PageId*) newNode;
+				//PageId* newPageNo = (PageId*) newNode;
 				// perform a bubble insert of the key
 				for (int i = 0; i < parent->numKeys; i++){
 
 					if (keyInt < parent->keyArray[i]) {
 						int key_temp = parent->keyArray[i];
-						PageId* page_temp = &parent->pageNoArray[i];
+						PageId page_temp = parent->pageNoArray[i];
 
 						parent->keyArray[i] = keyInt;
-						parent->pageNoArray[i] = *newPageNo;
+						parent->pageNoArray[i] = newPageNo;
 
 						keyInt = key_temp;
 						newPageNo = page_temp;
@@ -326,21 +352,21 @@ namespace badgerdb
 				}
 				parent->keyArray[parent->numKeys] = keyInt;
 				PageId page_temp = parent->pageNoArray[parent->numKeys];
-				parent->pageNoArray[parent->numKeys] = *newPageNo;
+				parent->pageNoArray[parent->numKeys] = newPageNo;
 				parent->pageNoArray[parent->numKeys+1] = page_temp;
 				parent->numKeys++;
 				parent->level = 1;
 
 				bufMgr->unPinPage(file,pageNo,true);
 
-				bufMgr->unPinPage(file,*newPageNo,true);
+				bufMgr->unPinPage(file,newPageNo,true);
 
 				bufMgr->unPinPage(file,parentPageId,true);
 			}
 			// Case: parent doesn't have space for new key
 			else{
-				int* parentKey = &parent->keyArray[splitIndex];
-				splitNonLeafNode(parentKey,parentPageId);
+				int parentKey = arr1[splitIndex];//&parent->keyArray[splitIndex];
+				splitNonLeafNode(parentKey,parentPageId, newPageNo);
 
 				bufMgr->unPinPage(file,pageNo,true);
 
@@ -358,35 +384,40 @@ namespace badgerdb
 	// key:		the key that causes overflow
 	// pageNo:	something
 	//--------------------------------------------------------------------
-	const void BTreeIndex::splitNonLeafNode(const void *key, PageId pageNo) {
+	const void BTreeIndex::splitNonLeafNode(int key, PageId parentPageNo, PageId previousNewPageNo) {
 		// cast node being split into a leaf node struct
 		Page* bufMgrPage;
-		bufMgr->readPage(file,pageNo,bufMgrPage);
+		bufMgr->readPage(file,parentPageNo,bufMgrPage);
 		Page* page = bufMgrPage;//&file->readPage(pageNo);
 		NonLeafNodeInt* node = (NonLeafNodeInt*) page;
 
-		int keyInt = *(int*)key;
+		int keyInt = key;
 
 		// initialize temporary arrays for key and rid storage
 		// size = num of records in full array + 1 being added
 		int arr1[INTARRAYNONLEAFSIZE+1];
-		PageId* arr2[INTARRAYNONLEAFSIZE+2];
+		PageId arr2[INTARRAYNONLEAFSIZE+2];
 		// following code block inserts everything into arr1[] and arr2[]
 		int offset = 0;
 		for(int i = 0; i < node->numKeys; i++){
 			if(keyInt < node->keyArray[i] && offset == 0){
 				arr1[i] = keyInt;
-				arr2[i] = &pageNo;
+				arr2[i] = previousNewPageNo;
 				offset = 1;
 				i--;
 			}
 			else{
 				arr1[i+offset] = node->keyArray[i];
-				arr2[i+offset] = &node->pageNoArray[i];
+				arr2[i+offset] = node->pageNoArray[i];
 			}
 		}
+		//key and rid were never entered!
+		if (offset == 0) {
+			arr1[node->numKeys] = keyInt;
+			arr2[node->numKeys] = previousNewPageNo;
+		}
 		//get the last item in pageNoArray, add it to last space in arr2
-		arr2[node->numKeys+1] = &node->pageNoArray[node->numKeys]; //MAYBE SWITCH TO INTARRAYNONLEAFSIZE
+		arr2[node->numKeys+1] = node->pageNoArray[node->numKeys]; //MAYBE SWITCH TO INTARRAYNONLEAFSIZE
 
 		// splitIndex is the index of the median key, and it points to
 		// the first element in the new node
@@ -405,9 +436,9 @@ namespace badgerdb
 		// fill entries of newNode arrays
 		for (int i = 0; i < numKeysNewNode; i++){
 			newNode->keyArray[i] = arr1[splitIndex + i];
-			newNode->pageNoArray[i] = *arr2[splitIndex + i];
+			newNode->pageNoArray[i] = arr2[splitIndex + i];
 		}
-		newNode->pageNoArray[numKeysNewNode] = *arr2[splitIndex+numKeysNewNode];
+		newNode->pageNoArray[numKeysNewNode] = arr2[splitIndex+numKeysNewNode];
 
 
 		// give newNode a parent
@@ -431,10 +462,10 @@ namespace badgerdb
 
 			// insert new key and children pageNo's
 			newRoot->keyArray[0] = arr1[splitIndex];
-			newRoot->pageNoArray[0] = pageNo;
+			newRoot->pageNoArray[0] = parentPageNo;
 			newRoot->pageNoArray[1] = newPageNo;
 
-			bufMgr->unPinPage(file,pageNo,true);
+			bufMgr->unPinPage(file,parentPageNo,true);
 
 			bufMgr->unPinPage(file,newPageNo,true);
 
@@ -450,15 +481,15 @@ namespace badgerdb
 			// Case: parent has space for new key
 			if (parent->numKeys < INTARRAYNONLEAFSIZE) {
 				// create variable for PageNo
-				PageId* newPageNo = (PageId*) newNode;
+				//PageId* newPageNo = (PageId*) newNode;
 				// perform a bubble insert of the key
 				for (int i = 0; i < parent->numKeys; i++){
 					if (keyInt < parent->keyArray[i]) {
 						int key_temp = parent->keyArray[i];
-						PageId* page_temp = &parent->pageNoArray[i];
+						PageId page_temp = parent->pageNoArray[i];
 
 						parent->keyArray[i] = keyInt;
-						parent->pageNoArray[i] = *newPageNo;
+						parent->pageNoArray[i] = newPageNo;
 
 						keyInt = key_temp;
 						newPageNo = page_temp;
@@ -466,23 +497,23 @@ namespace badgerdb
 				}
 				parent->keyArray[parent->numKeys] = keyInt;
 				PageId page_temp = parent->pageNoArray[parent->numKeys];
-				parent->pageNoArray[parent->numKeys] = *newPageNo;
+				parent->pageNoArray[parent->numKeys] = newPageNo;
 				parent->pageNoArray[parent->numKeys+1] = page_temp;
 				parent->numKeys++;
 				parent->level = 0;
 
-				bufMgr->unPinPage(file,pageNo,true);
+				bufMgr->unPinPage(file,parentPageNo,true);
 
-				bufMgr->unPinPage(file,*newPageNo,true);
+				bufMgr->unPinPage(file,newPageNo,true);
 
 				bufMgr->unPinPage(file,parentPageId,true);
 			}
 			// Case: parent doesn't have space for new key
 			else{
-				int* parentKey = &parent->keyArray[splitIndex];
-				splitNonLeafNode(parentKey,parentPageId);
+				int parentKey = arr1[splitIndex];//&parent->keyArray[splitIndex];
+				splitNonLeafNode(parentKey,parentPageId,newPageNo);
 
-				bufMgr->unPinPage(file,pageNo,true);
+				bufMgr->unPinPage(file,parentPageNo,true);
 
 				bufMgr->unPinPage(file,newPageNo,true);
 
@@ -514,22 +545,25 @@ namespace badgerdb
 					Page* new_bufMgrPage;
 					bufMgr->readPage(file,node->pageNoArray[i],new_bufMgrPage);
 					foundLeafPageNo = node->pageNoArray[i];
+					bufMgr->unPinPage(file, pageNo, false);
 					return (LeafNodeInt*)new_bufMgrPage;//&file->readPage(node->pageNoArray[i]);
 				}
 			}
 			Page* new_bufPage;
 			bufMgr->readPage(file,node->pageNoArray[node->numKeys],new_bufPage);
 			foundLeafPageNo = node->pageNoArray[node->numKeys];
-
+			bufMgr->unPinPage(file, pageNo, false);
 			return (LeafNodeInt*)new_bufPage;//&file->readPage(node->pageNoArray[node->numKeys]);
 		}
 		//else, node level must be 0
 		else if(node->level == 0) {
 			for(int i = 0; i < node->numKeys - 1; i++){
 				if(key < node->keyArray[i]){
+					bufMgr->unPinPage(file, pageNo, false);
 					return findLeafNode(key, node->pageNoArray[i]);
 				}
 			}
+			bufMgr->unPinPage(file, pageNo, false);
 			return findLeafNode(key, node->pageNoArray[node->numKeys]);
 		}
 	}
@@ -610,6 +644,7 @@ namespace badgerdb
 
 		//if the next entry is larger than the keys in the array, a new page is needed
 		if (nextEntry == currentLeafNode->numKeys) {
+			bufMgr->unPinPage(file,currentPageNum,true);
 			currentPageNum = currentLeafNode->rightSibPageNo;
 			Page* bufMgrPage;
 			bufMgr->readPage(file,currentLeafNode->rightSibPageNo,bufMgrPage);
