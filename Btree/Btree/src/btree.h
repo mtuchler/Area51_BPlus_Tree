@@ -308,6 +308,8 @@ class BTreeIndex {
    */
 	Operator	highOp;
 
+  PageId foundLeafPageNo;
+
 	
  public:
 
@@ -376,7 +378,7 @@ class BTreeIndex {
 	// pageNo:	a NonLeafNodeInt* that will serve as the start of the search
 	// returns:	the LeafNodeInt* where the key is in range
 	//--------------------------------------------------------------------
-	LeafNodeInt* findLeafNode(const void *key, PageId pageNo);
+	LeafNodeInt* findLeafNode(int key, PageId pageNo);
 
 
   /**
