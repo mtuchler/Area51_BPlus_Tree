@@ -46,13 +46,13 @@ enum Operator
  * @brief Number of key slots in B+Tree leaf for INTEGER key.
  */
 //                                                  sibling ptr             key               rid
-const  int INTARRAYLEAFSIZE = ( Page::SIZE - sizeof( PageId ) ) / ( sizeof( int ) + sizeof( RecordId ) );
+const  int INTARRAYLEAFSIZE = 3;//( Page::SIZE - sizeof( PageId ) ) / ( sizeof( int ) + sizeof( RecordId ) );
 
 /**
  * @brief Number of key slots in B+Tree non-leaf for INTEGER key.
  */
 //                                                     level     extra pageNo                  key       pageNo
-const  int INTARRAYNONLEAFSIZE = ( Page::SIZE - sizeof( int ) - sizeof( PageId ) ) / ( sizeof( int ) + sizeof( PageId ) );
+const  int INTARRAYNONLEAFSIZE = 3;//( Page::SIZE - sizeof( int ) - sizeof( PageId ) ) / ( sizeof( int ) + sizeof( PageId ) );
 
 /**
  * @brief Structure to store a key-rid pair. It is used to pass the pair to functions that 
@@ -361,7 +361,7 @@ class BTreeIndex {
 	// pageNo:	the pointer to the node being split
 	// returns:	void
 	// -------------------------------------------------------------
-  const void splitLeafNode(const void *key, const RecordId rid,  PageId pageNo);
+  const void splitLeafNode(int key, const RecordId rid,  PageId pageNo);
 
   //--------------------------------------------------------------------
 	// @brief	splitNonLeafNode is used for splitting a node
@@ -369,7 +369,7 @@ class BTreeIndex {
 	// key:		the key that causes overflow
 	// pageNo:	something
 	//--------------------------------------------------------------------
-	const void splitNonLeafNode(const void *key, PageId pageNo);
+	const void splitNonLeafNode(int key, PageId pageNo, PageId previousNewPageNo);
 
   //--------------------------------------------------------------------
 	// @brief	findLeafNode traverses the tree downwards to find the
