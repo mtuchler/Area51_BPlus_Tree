@@ -118,8 +118,6 @@ namespace badgerdb
 		Page* page;
 		bufMgr->readPage(file,indexMetaInfo.rootPageNo,page);
 
-		std::cout << "Root Page No: " << indexMetaInfo.rootPageNo << std::endl;
-
 		int keyInt = *(int*)key;
 
 		RecordId currRid = rid;
@@ -224,7 +222,7 @@ namespace badgerdb
 			catch (PageNotPinnedException e) {
 
 			}
-			
+
 		}
 	}
 
