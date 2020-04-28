@@ -414,6 +414,8 @@ class BTreeIndex {
 	 * @throws ScanNotInitializedException If no scan has been initialized.
 	**/
 	const void endScan();
+
+  const void PrintTree(PageId pageNum, bool IsLeaf);
 	
 };
 

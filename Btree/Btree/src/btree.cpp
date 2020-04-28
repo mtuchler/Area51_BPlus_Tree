@@ -85,8 +85,12 @@ namespace badgerdb
 				const char *record = recordStr.c_str();
 				//creates the key using the record and the byte offset
 				int key = *((int *)(record + attrByteOffset));
+
+				std::cout << "INSERTING ENTRY: " << key << " ON CONTINUE";
 				//inserts the entry into the index
 				insertEntry(&key, scanRid);
+
+				PrintTree(indexMetaInfo.rootPageNo, indexMetaInfo.isLeaf);
 			}
 		} catch (EndOfFileException e) {
 			bufMgrIn = bufMgr;
@@ -128,11 +132,11 @@ namespace badgerdb
 			LeafNodeInt* root = (LeafNodeInt*) page;
 			// This is a strange place to set the root's parent pointer but it works
 			root->parent = -1;
-			std::cout << "KeyInt: " << keyInt << std::endl;
-			std::cout << "rid: " << rid.page_number << "-" << rid.slot_number << std::endl;
-			std::cout << "root->keyArray: " << root->keyArray << std::endl;
-			std::cout << "root->numKeys: " << root->numKeys << std::endl;
-			std::cout << "root->ridArray: " << root->ridArray << std::endl;
+			// std::cout << "KeyInt: " << keyInt << std::endl;
+			// std::cout << "rid: " << rid.page_number << "-" << rid.slot_number << std::endl;
+			// std::cout << "root->keyArray: " << root->keyArray << std::endl;
+			// std::cout << "root->numKeys: " << root->numKeys << std::endl;
+			// std::cout << "root->ridArray: " << root->ridArray << std::endl;
 			// Case: The root node is full during the insert
 			// perform leaf node split
 			if(root->numKeys == INTARRAYLEAFSIZE){
@@ -275,7 +279,7 @@ namespace badgerdb
 		// create the new node, a sibling page to the right of "node"
 		PageId newPageNo;
 		LeafNodeInt* newNode = CreateLeafNode(newPageNo);
-		std::cout << "hello" << std::endl;
+		//std::cout << "hello" << std::endl;
 		//unpin page ASAP
 		// TODO: WHEN TO UNPIN PAGES ----- bufMgr->unPinPage(file, newPageNo, true);
 
@@ -310,7 +314,7 @@ namespace badgerdb
 			// set the info that makes it a root
 			newRoot->parent = -1;
 			newRoot->level = 1;
-			std::cout << "Printing newRootPageNo: " << newRootPageNo << std::endl;
+			//std::cout << "Printing newRootPageNo: " << newRootPageNo << std::endl;
 			indexMetaInfo.rootPageNo = newRootPageNo;
 			// set each child's parent field
 			newNode->parent = newRootPageNo;
@@ -548,7 +552,7 @@ namespace badgerdb
 		//Page* page = bufMgrPage; //&file->readPage(pageNo);
 		NonLeafNodeInt* node = (NonLeafNodeInt*) bufMgrPage;
 
-		std::cout << "node level: " << node->level << std::endl;
+		//std::cout << "node level: " << node->level << std::endl;
 
 		if(node->level == 1){
 			for(int i = 0; i < node->numKeys; i++){
@@ -588,22 +592,22 @@ namespace badgerdb
 					const void* highValParm,
 					const Operator highOpParm)
 	{
-		std::cout << "Reached start scan pre-exception check"<< std::endl;
+		//std::cout << "Reached start scan pre-exception check"<< std::endl;
 		//throw necessary exceptions given bad input
 		if(*(int*)lowValParm > *(int*)highValParm){
-			std::cout << "Throwing Bad Scan Range Exception: lowValParm|highValParm" << *(int*)lowValParm << "|" << *(int*)highValParm<< std::endl;
+			//std::cout << "Throwing Bad Scan Range Exception: lowValParm|highValParm" << *(int*)lowValParm << "|" << *(int*)highValParm<< std::endl;
 			throw BadScanrangeException();
 		}
 		if(lowOpParm != GT  && lowOpParm != GTE){
-			std::cout << "Throwing Bad OPCODES Exception"<< std::endl;
+			//std::cout << "Throwing Bad OPCODES Exception"<< std::endl;
 			throw BadOpcodesException();
 		}
 		if(highOpParm != LT && highOpParm != LTE){
-			std::cout << "Throwing Bad OPCODES Exception"<< std::endl;
+			//std::cout << "Throwing Bad OPCODES Exception"<< std::endl;
 			throw BadOpcodesException();
 		}
 
-		std::cout << "Reached start scan (no badOpcodes or bad scanrange)"<< std::endl;
+		//std::cout << "Reached start scan (no badOpcodes or bad scanrange)"<< std::endl;
 
 		scanExecuting = true;
 		lowValInt = *((int*) lowValParm);
@@ -616,15 +620,15 @@ namespace badgerdb
 		if(lowOpParm == GT){
 			LeafNodeInt* currPage = findLeafNode(lowValInt + 1, indexMetaInfo.rootPageNo);
 			currentPageData = (Page*) currPage;
-			std::cout << "b4 current page number"<< std::endl;
+			//std::cout << "b4 current page number"<< std::endl;
 			currentPageNum = foundLeafPageNo;
-			std::cout << "after current page number"<< std::endl;
-			std::cout << "currPage->numKeys"<< currPage->numKeys << std::endl;
+			//std::cout << "after current page number"<< std::endl;
+			//std::cout << "currPage->numKeys"<< currPage->numKeys << std::endl;
 			for(int i = 0; i < currPage->numKeys; i++){
-				std::cout << "Setting next entry" << std::endl;
+				//std::cout << "Setting next entry" << std::endl;
 				if(currPage->keyArray[i] > lowValInt){
 					nextEntry = i;
-					std::cout << "NextEntry set to: " << nextEntry << std::endl;
+					//std::cout << "NextEntry set to: " << nextEntry << std::endl;
 					break;
 				}
 			}
@@ -636,7 +640,7 @@ namespace badgerdb
 			for(int i = 0; i < currPage->numKeys; i++){
 				if(currPage->keyArray[i] >= lowValInt){
 					nextEntry = i;
-					std::cout << "NextEntry set to: " << nextEntry << std::endl;
+					//std::cout << "NextEntry set to: " << nextEntry << std::endl;
 					break;
 				}
 			}
@@ -649,7 +653,7 @@ namespace badgerdb
 
 	const void BTreeIndex::scanNext(RecordId& outRid)
 	{
-		std::cout << "Entered ScanNext()" << nextEntry << std::endl;
+		//std::cout << "Entered ScanNext()" << nextEntry << std::endl;
 
 		LeafNodeInt* currentLeafNode = (LeafNodeInt*)currentPageData;
 
@@ -708,6 +712,85 @@ namespace badgerdb
 		// lowOp = NULL;
 		// highOp = NULL;
 
+	}
+
+	const void BTreeIndex::PrintTree(PageId pageNum, bool IsLeaf)
+	{
+		if (IsLeaf) { //base case
+
+			LeafNodeInt* leaf;
+
+			bufMgr->readPage(file,pageNum,(Page*&)leaf);
+
+			std::cout << ""<< std::endl;
+			std::cout << "------------------------------------------------------------------------------"<< std::endl;
+
+			std::cout << "LeafPage: " << pageNum << " NumKeys: " << leaf->numKeys << " Parent: " << leaf->parent << std::endl;
+			std::cout << "Printing Key Array: ";
+
+			for (int i = 0; i < INTARRAYLEAFSIZE; i++) {
+				std::cout << " " << leaf->keyArray[i] << " " << "|";
+			}
+			std::cout << std::endl;
+
+			std::cout << "Printing RID Array: ";
+
+			for (int i = 0; i < INTARRAYLEAFSIZE; i++) {
+				std::cout << leaf->ridArray[i].page_number << "-" << leaf->ridArray[i].slot_number << "|";
+			}
+			std::cout << std::endl;
+
+			std::cout << "------------------------------------------------------------------------------"<< std::endl;
+			std::cout << ""<< std::endl;
+
+			bufMgr->unPinPage(file,pageNum,true);
+		} else {
+			NonLeafNodeInt* nonleaf;
+
+			bufMgr->readPage(file,pageNum,(Page*&)nonleaf);
+
+			std::cout << ""<< std::endl;
+			std::cout << "------------------------------------------------------------------------------"<< std::endl;
+
+			std::cout << "NonLeafPage: " << pageNum << " NumKeys: " << nonleaf->numKeys << " Parent: " << nonleaf->parent << " Level: " << nonleaf->level << std::endl;
+
+			std::cout << "Printing Key Array: ";
+
+			for (int i = 0; i < INTARRAYLEAFSIZE; i++) {
+				std::cout << nonleaf->keyArray[i] << "|";
+			}
+			std::cout << std::endl;
+
+			std::cout << "Printing PageNoArray Array: ";
+
+			for (int i = 0; i < INTARRAYLEAFSIZE+1; i++) {
+				std::cout << nonleaf->pageNoArray << "|";
+			}
+			std::cout << std::endl;
+
+			std::cout << "------------------------------------------------------------------------------"<< std::endl;
+			std::cout << ""<< std::endl;
+
+			if (nonleaf->level == 1) {
+
+				for (int i = 0; i < INTARRAYLEAFSIZE+1; i++) {
+					
+					PrintTree(nonleaf->pageNoArray[i],true);
+				}
+				bufMgr->unPinPage(file,pageNum,true);
+			}
+			else if (nonleaf->level == 0) {
+				for (int i = 0; i < INTARRAYLEAFSIZE+1; i++) {
+					
+					PrintTree(nonleaf->pageNoArray[i],false);
+				}
+				bufMgr->unPinPage(file,pageNum,true);
+			}
+			else {
+				std::cout << "LEVEL ERROR NON LEAF PAGE: " << pageNum << std::endl;
+				bufMgr->unPinPage(file,pageNum,true);
+			}
+		}
 	}
 
 }
